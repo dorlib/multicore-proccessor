@@ -1,0 +1,13 @@
+add $r2, $zero, $imm, 1
+sw $r2, $zero, $imm, 16
+lw $r3, $zero, $imm, 72
+lw $r4, $zero, $imm, 136
+lw $r5, $zero, $imm, 200
+add $r6, $zero, $imm, 177
+sw $r6, $zero, $imm, 264
+lw $r7, $zero, $imm, 0
+lw $r8, $zero, $imm, 32
+lw $r9, $zero, $imm, 48
+lw $r10, $zero, $imm, 528
+lw $r10, $zero, $imm, 784
+halt $zero, $zero, $zero, 0

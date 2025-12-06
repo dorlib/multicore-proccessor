@@ -1,0 +1,8 @@
+cycles 94
+instructions 8
+read_hit 0
+write_hit 1
+read_miss 2
+write_miss 1
+decode stall 7
+mem stall 75

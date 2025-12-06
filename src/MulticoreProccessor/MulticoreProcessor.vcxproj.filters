@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="MulticoreProcessor.c" />
+    <ClCompile Include="Interface\src\Files.c">
+      <Filter>Interface\src</Filter>
+    </ClCompile>
+    <ClCompile Include="Core\src\Core.c">
+      <Filter>Core\src</Filter>
+    </ClCompile>
+    <ClCompile Include="Interface\src\Bus.c">
+      <Filter>Interface\src</Filter>
+    </ClCompile>
+    <ClCompile Include="Core\src\Opcodes.c">
+      <Filter>Interface\src</Filter>
+    </ClCompile>
+    <ClCompile Include="Core\src\Cache.c">
+      <Filter>Core\src</Filter>
+    </ClCompile>
+    <ClCompile Include="Core\src\Pipeline.c">
+      <Filter>Core\src</Filter>
+    </ClCompile>
+    <ClCompile Include="Interface\src\MainMemory.c">
+      <Filter>Interface\src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Core">
+      <UniqueIdentifier>{871c7931-8bf6-4816-87bf-c1bb5cc12078}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core\include">
+      <UniqueIdentifier>{f0e59f9e-afa4-4a59-94aa-3e0942e15e09}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core\src">
+      <UniqueIdentifier>{f93fb59d-a53a-4d25-89cf-7ed0a1c77e43}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Interface">
+      <UniqueIdentifier>{8969cf36-90df-4946-88ac-057916856816}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Interface\include">
+      <UniqueIdentifier>{a7ca7862-37b1-4ee0-ac26-d879762a4c21}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Interface\src">
+      <UniqueIdentifier>{69f5dd89-575a-466a-83a7-eab8e06358ce}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Interface\include\Files.h">
+      <Filter>Interface\include</Filter>
+    </ClInclude>
+    <ClInclude Include="Interface\include\Helpers.h">
+      <Filter>Interface\include</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\include\Core.h">
+      <Filter>Core\include</Filter>
+    </ClInclude>
+    <ClInclude Include="Interface\include\Bus.h">
+      <Filter>Interface\include</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\include\Opcodes.h">
+      <Filter>Interface\include</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\include\Cache.h">
+      <Filter>Core\include</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\include\Pipeline.h">
+      <Filter>Core\include</Filter>
+    </ClInclude>
+    <ClInclude Include="Interface\include\MainMemory.h">
+      <Filter>Interface\include</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

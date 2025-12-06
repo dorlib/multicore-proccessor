@@ -1,0 +1,10 @@
+add $r2, $zero, $imm, 0xABCD
+sw $r2, $zero, $zero, 0
+lw $r3, $zero, $imm, 8
+beq $imm, $r3, $zero, 2
+add $zero, $zero, $zero, 0
+lw $r4, $zero, $zero, 0
+add $r5, $zero, $imm, 0x1234
+sw $r5, $zero, $zero, 0
+lw $r6, $zero, $imm, 512
+halt $zero, $zero, $zero, 0

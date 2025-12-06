@@ -1,0 +1,14 @@
+add $r2, $zero, $imm, 100
+sub $r2, $r2, $imm, 1
+bne $imm, $r2, $zero, 1
+add $zero, $zero, $zero, 0
+lw $r3, $zero, $zero, 0
+add $r4, $zero, $imm, 1
+sw $r4, $zero, $imm, 8
+add $r2, $zero, $imm, 50
+sub $r2, $r2, $imm, 1
+bne $imm, $r2, $zero, 8
+add $zero, $zero, $zero, 0
+lw $r5, $zero, $zero, 0
+lw $r6, $zero, $imm, 520
+halt $zero, $zero, $zero, 0
