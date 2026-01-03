@@ -209,18 +209,18 @@ Hazards are detected in the Decode stage by checking dependencies between the cu
 ```c
 // Skip hazard check if pipeline stage contains non-writing instruction
 if (stage_opcode == SW || is_branch(stage_opcode) || stage_opcode == HALT)
-    → No hazard from this stage (rd field is NOT a destination)
+    return false;  // No hazard from this stage (rd field is NOT a destination)
 
 // For ALU/LW instructions in Decode: check rs and rt as sources
 if (decode.rs == execute.rd || decode.rs == mem.rd || decode.rs == wb.rd ||
     decode.rt == execute.rd || decode.rt == mem.rd || decode.rt == wb.rd)
-    → STALL
+    stall();  // STALL
 
 // For SW instruction in Decode: also check rd as source (rd holds data to store)
 if (decode.rd == execute.rd || decode.rd == mem.rd || decode.rd == wb.rd ||
     decode.rs == execute.rd || decode.rs == mem.rd || decode.rs == wb.rd ||
     decode.rt == execute.rd || decode.rt == mem.rd || decode.rt == wb.rd)
-    → STALL
+    stall();  // STALL
 ```
 
 **Bug Fix Note**: An earlier version incorrectly treated the `rd` field of SW and branch instructions as destinations, causing false hazard detection and unnecessary stalls.
