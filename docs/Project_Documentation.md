@@ -45,32 +45,41 @@ The simulator is written in C and produces detailed trace files for debugging an
 
 ### 2.1 High-Level Block Diagram
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         SYSTEM BUS                                   │
-│                    (Round-Robin Arbitration)                         │
-└───────┬───────────────┬───────────────┬───────────────┬─────────────┘
-        │               │               │               │
-        ▼               ▼               ▼               ▼
-┌───────────────┐ ┌───────────────┐ ┌───────────────┐ ┌───────────────┐
-│    CORE 0     │ │    CORE 1     │ │    CORE 2     │ │    CORE 3     │
-├───────────────┤ ├───────────────┤ ├───────────────┤ ├───────────────┤
-│   Pipeline    │ │   Pipeline    │ │   Pipeline    │ │   Pipeline    │
-│  (5 stages)   │ │  (5 stages)   │ │  (5 stages)   │ │  (5 stages)   │
-├───────────────┤ ├───────────────┤ ├───────────────┤ ├───────────────┤
-│    Cache      │ │    Cache      │ │    Cache      │ │    Cache      │
-│  (512 words)  │ │  (512 words)  │ │  (512 words)  │ │  (512 words)  │
-│   DSRAM+TSRAM │ │   DSRAM+TSRAM │ │   DSRAM+TSRAM │ │   DSRAM+TSRAM │
-└───────────────┘ └───────────────┘ └───────────────┘ └───────────────┘
-        │               │               │               │
-        └───────────────┴───────────────┴───────────────┘
-                                │
-                                ▼
-                    ┌───────────────────────┐
-                    │     MAIN MEMORY       │
-                    │    (2^21 words)       │
-                    │    16-cycle latency   │
-                    └───────────────────────┘
+```mermaid
+flowchart TB
+    subgraph BUS["SYSTEM BUS (Round-Robin Arbitration)"]
+    end
+    
+    subgraph CORE0["CORE 0"]
+        P0["Pipeline\n(5 stages)"]
+        C0["Cache (512 words)\nDSRAM+TSRAM"]
+    end
+    
+    subgraph CORE1["CORE 1"]
+        P1["Pipeline\n(5 stages)"]
+        C1["Cache (512 words)\nDSRAM+TSRAM"]
+    end
+    
+    subgraph CORE2["CORE 2"]
+        P2["Pipeline\n(5 stages)"]
+        C2["Cache (512 words)\nDSRAM+TSRAM"]
+    end
+    
+    subgraph CORE3["CORE 3"]
+        P3["Pipeline\n(5 stages)"]
+        C3["Cache (512 words)\nDSRAM+TSRAM"]
+    end
+    
+    MEM[("MAIN MEMORY\n2^21 words\n16-cycle latency")]
+    
+    BUS --- CORE0
+    BUS --- CORE1
+    BUS --- CORE2
+    BUS --- CORE3
+    CORE0 --- MEM
+    CORE1 --- MEM
+    CORE2 --- MEM
+    CORE3 --- MEM
 ```
 
 ### 2.2 System Parameters
@@ -107,26 +116,16 @@ Each core has 16 registers (32-bit each):
 
 ### 3.3 Core State Machine
 
-```
-         ┌──────────────────┐
-         │     RUNNING      │
-         │                  │
-         │  Execute cycles  │
-         └────────┬─────────┘
-                  │ HALT instruction
-                  ▼
-         ┌──────────────────┐
-         │     HALTING      │
-         │                  │
-         │  Drain pipeline  │
-         └────────┬─────────┘
-                  │ Pipeline empty
-                  ▼
-         ┌──────────────────┐
-         │     HALTED       │
-         │                  │
-         │  Core stopped    │
-         └──────────────────┘
+```mermaid
+stateDiagram-v2
+    [*] --> RUNNING
+    RUNNING --> HALTING : HALT instruction
+    HALTING --> HALTED : Pipeline empty
+    HALTED --> [*]
+    
+    RUNNING : Execute cycles
+    HALTING : Drain pipeline
+    HALTED : Core stopped
 ```
 
 ---
@@ -137,13 +136,33 @@ Each core has 16 registers (32-bit each):
 
 The processor uses a classic 5-stage RISC pipeline:
 
-```
-┌─────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐
-│  FETCH  │──▶│ DECODE  │──▶│ EXECUTE │──▶│   MEM   │──▶│   WB    │
-│         │   │         │   │         │   │         │   │         │
-│ PC→IMEM │   │ RegRead │   │  ALU    │   │ Cache   │   │RegWrite │
-│ IR←Inst │   │ Hazard  │   │ Branch  │   │ Access  │   │         │
-└─────────┘   └─────────┘   └─────────┘   └─────────┘   └─────────┘
+```mermaid
+flowchart LR
+    subgraph FETCH
+        F1["PC→IMEM"]
+        F2["IR←Inst"]
+    end
+    
+    subgraph DECODE
+        D1["RegRead"]
+        D2["Hazard"]
+    end
+    
+    subgraph EXECUTE
+        E1["ALU"]
+        E2["Branch"]
+    end
+    
+    subgraph MEM
+        M1["Cache"]
+        M2["Access"]
+    end
+    
+    subgraph WB
+        W1["RegWrite"]
+    end
+    
+    FETCH --> DECODE --> EXECUTE --> MEM --> WB
 ```
 
 ### 4.2 Stage Details
@@ -221,42 +240,45 @@ Two types of stalls:
 
 ### 5.1 Cache Organization
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         CACHE (512 words)                        │
-├─────────────────────────────────────────────────────────────────┤
-│  64 cache lines × 8 words per line = 512 words                  │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ┌────────────────────────────────────────────────────────────┐ │
-│  │ TSRAM (Tag + State RAM) - 64 entries                       │ │
-│  │ ┌─────────┬───────────────────────────────────────────────┐│ │
-│  │ │ MESI(2) │              TAG (12 bits)                    ││ │
-│  │ └─────────┴───────────────────────────────────────────────┘│ │
-│  └────────────────────────────────────────────────────────────┘ │
-│                                                                  │
-│  ┌────────────────────────────────────────────────────────────┐ │
-│  │ DSRAM (Data RAM) - 512 entries (32-bit words)              │ │
-│  │ ┌──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┐ │ │
-│  │ │Word 0│Word 1│Word 2│Word 3│Word 4│Word 5│Word 6│Word 7│ │ │
-│  │ └──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┘ │ │
-│  └────────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+block-beta
+    columns 1
+    block:CACHE["CACHE (512 words)"]
+        columns 1
+        A["64 cache lines × 8 words per line = 512 words"]
+        block:TSRAM["TSRAM (Tag + State RAM) - 64 entries"]
+            columns 2
+            B["MESI (2 bits)"]
+            C["TAG (12 bits)"]
+        end
+        block:DSRAM["DSRAM (Data RAM) - 512 entries (32-bit words)"]
+            columns 8
+            D0["Word 0"]
+            D1["Word 1"]
+            D2["Word 2"]
+            D3["Word 3"]
+            D4["Word 4"]
+            D5["Word 5"]
+            D6["Word 6"]
+            D7["Word 7"]
+        end
+    end
 ```
 
 ### 5.2 Address Breakdown (21 bits)
 
+```mermaid
+packet-beta
+  0-2: "OFFSET (3)"
+  3-8: "INDEX (6)"
+  9-20: "TAG (12)"
 ```
-┌────────────────┬─────────────────┬────────────────┐
-│    TAG (12)    │   INDEX (6)     │  OFFSET (3)    │
-├────────────────┼─────────────────┼────────────────┤
-│   bits 20:9    │    bits 8:3     │   bits 2:0     │
-└────────────────┴─────────────────┴────────────────┘
 
-• TAG: Identifies which memory block is cached
-• INDEX: Selects one of 64 cache lines
-• OFFSET: Selects one of 8 words within the block
-```
+| Field | Bits | Description |
+|-------|------|-------------|
+| TAG | 20:9 | Identifies which memory block is cached |
+| INDEX | 8:3 | Selects one of 64 cache lines |
+| OFFSET | 2:0 | Selects one of 8 words within the block |
 
 ### 5.3 Cache Parameters
 
@@ -291,30 +313,28 @@ Two types of stalls:
 
 ### 6.2 State Transition Diagram
 
-```
-                    ┌─────────────────────────────────────┐
-                    │                                     │
-                    ▼                                     │
-              ┌───────────┐                               │
-         ┌────│  INVALID  │◀───────────────────────┐      │
-         │    └───────────┘                        │      │
-         │          │                              │      │
-         │          │ PrRd/PrWr                    │      │
-         │          │ (miss)                       │      │
-         │          ▼                              │      │
-         │    ┌───────────┐   BusRd (snoop)  ┌───────────┐│
-         │    │ EXCLUSIVE │─────────────────▶│  SHARED   ││
-         │    └───────────┘                  └───────────┘│
-         │          │                              │      │
-         │          │ PrWr                         │ PrWr │
-         │          ▼                              ▼      │
-         │    ┌───────────┐                  ┌───────────┐│
-         └────│ MODIFIED  │◀─────────────────│  SHARED   ││
-              └───────────┘     PrWr         └───────────┘│
-                    │                              │      │
-                    │ BusRdX (snoop)               │      │
-                    │ Flush data                   │      │
-                    └──────────────────────────────┴──────┘
+```mermaid
+stateDiagram-v2
+    [*] --> Invalid
+    
+    Invalid --> Exclusive : PrRd (miss, no sharers)
+    Invalid --> Shared : PrRd (miss, sharers exist)
+    Invalid --> Modified : PrWr (miss)
+    
+    Exclusive --> Shared : BusRd (snoop)
+    Exclusive --> Invalid : BusRdX (snoop)
+    Exclusive --> Modified : PrWr (silent upgrade)
+    
+    Shared --> Modified : PrWr (upgrade)
+    Shared --> Invalid : BusRdX (snoop)
+    
+    Modified --> Shared : BusRd (snoop, flush)
+    Modified --> Invalid : BusRdX (snoop, flush)
+    
+    Invalid : State = 0
+    Shared : State = 1
+    Exclusive : State = 2
+    Modified : State = 3
 ```
 
 ### 6.3 Bus Commands
@@ -346,54 +366,77 @@ When a core observes a bus transaction:
 
 ### 7.1 Bus Signals
 
+```mermaid
+packet-beta
+  0-1: "bus_origid (2)"
+  2-3: "bus_cmd (2)"
+  4-24: "bus_addr (21)"
+  25-56: "bus_data (32)"
+  57: "shared"
 ```
-┌────────────────────────────────────────────────────────────────────┐
-│                           SYSTEM BUS                                │
-├────────────────────────────────────────────────────────────────────┤
-│  bus_origid  [2 bits]  - Requesting core ID (0-3)                  │
-│  bus_cmd     [2 bits]  - Command (NoOp/BusRd/BusRdX/Flush)         │
-│  bus_addr    [21 bits] - Memory address                            │
-│  bus_data    [32 bits] - Data word (for Flush)                     │
-│  bus_shared  [1 bit]   - Shared signal from snoopers               │
-└────────────────────────────────────────────────────────────────────┘
-```
+
+| Signal | Width | Description |
+|--------|-------|-------------|
+| bus_origid | 2 bits | Requesting core ID (0-3) |
+| bus_cmd | 2 bits | Command (NoOp/BusRd/BusRdX/Flush) |
+| bus_addr | 21 bits | Memory address |
+| bus_data | 32 bits | Data word (for Flush) |
+| bus_shared | 1 bit | Shared signal from snoopers |
 
 ### 7.2 Round-Robin Arbitration
 
 The bus uses round-robin arbitration to ensure fairness:
 
+```mermaid
+flowchart LR
+    C0((Core 0)) --> C1((Core 1))
+    C1 --> C2((Core 2))
+    C2 --> C3((Core 3))
+    C3 --> C0
 ```
-Priority rotates: Core 0 → Core 1 → Core 2 → Core 3 → Core 0 → ...
 
-When multiple cores request the bus:
+**Algorithm:**
 1. Check from current priority core
 2. Grant to first requesting core in order
 3. After transaction, priority moves to next core
-```
 
 ### 7.3 Bus Transaction Sequence
 
 #### Read Miss (BusRd)
-```
-Cycle 1:    Core issues BusRd
-Cycles 2-17: Wait for memory (16 cycles)
-Cycles 18-25: Receive 8 words from memory
-Cycle 26:   Transaction complete, core resumes
+```mermaid
+gantt
+    title BusRd Transaction Timeline
+    dateFormat X
+    axisFormat %s
+    section Transaction
+    Issue BusRd       :a1, 0, 1
+    Memory Latency    :a2, 1, 16
+    Receive 8 words   :a3, 17, 8
+    Complete          :a4, 25, 1
 ```
 
 #### Write Miss (BusRdX)
-```
-Cycle 1:    Core issues BusRdX
-            Other caches invalidate their copies
-Cycles 2-17: Wait for memory (16 cycles)
-Cycles 18-25: Receive 8 words from memory
-Cycle 26:   Transaction complete, core writes
+```mermaid
+gantt
+    title BusRdX Transaction Timeline
+    dateFormat X
+    axisFormat %s
+    section Transaction
+    Issue BusRdX + Invalidate :a1, 0, 1
+    Memory Latency            :a2, 1, 16
+    Receive 8 words           :a3, 17, 8
+    Complete + Write          :a4, 25, 1
 ```
 
 #### Flush (Modified → Memory)
-```
-Cycles 1-8: Write 8 words to memory
-Cycle 9:    Transaction complete
+```mermaid
+gantt
+    title Flush Transaction Timeline
+    dateFormat X
+    axisFormat %s
+    section Transaction
+    Write 8 words to memory :a1, 0, 8
+    Complete                :a2, 8, 1
 ```
 
 ---
@@ -413,14 +456,22 @@ Cycle 9:    Transaction complete
 
 ### 8.2 Memory Timing
 
-```
-Memory Read Transaction:
-┌───────────────────────────────────────────────────────────────────┐
-│ Request │◀────── 16 cycles latency ──────▶│ W0│W1│W2│W3│W4│W5│W6│W7│
-└───────────────────────────────────────────────────────────────────┘
-           └─────────────────────────────────┘└────────────────────┘
-                    Wait for memory               8 words arrive
-                                                  (1 per cycle)
+```mermaid
+sequenceDiagram
+    participant Cache
+    participant Memory
+    
+    Cache->>Memory: Read Request
+    Note over Memory: 16 cycles latency
+    Memory-->>Cache: Word 0
+    Memory-->>Cache: Word 1
+    Memory-->>Cache: Word 2
+    Memory-->>Cache: Word 3
+    Memory-->>Cache: Word 4
+    Memory-->>Cache: Word 5
+    Memory-->>Cache: Word 6
+    Memory-->>Cache: Word 7
+    Note over Cache: Block received (8 words, 1/cycle)
 ```
 
 ---
@@ -429,14 +480,22 @@ Memory Read Transaction:
 
 ### 9.1 Instruction Format (32 bits)
 
+```mermaid
+packet-beta
+  0-11: "Immediate (12)"
+  12-15: "Rt (4)"
+  16-19: "Rs (4)"
+  20-23: "Rd (4)"
+  24-31: "Opcode (8)"
 ```
-┌────────┬────────┬────────┬────────┬─────────────────────────────────┐
-│ Opcode │   Rd   │   Rs   │   Rt   │           Immediate             │
-│  (8)   │  (4)   │  (4)   │  (4)   │             (12)                │
-├────────┼────────┼────────┼────────┼─────────────────────────────────┤
-│ 31:24  │ 23:20  │ 19:16  │ 15:12  │             11:0                │
-└────────┴────────┴────────┴────────┴─────────────────────────────────┘
-```
+
+| Field | Bits | Width |
+|-------|------|-------|
+| Opcode | 31:24 | 8 bits |
+| Rd | 23:20 | 4 bits |
+| Rs | 19:16 | 4 bits |
+| Rt | 15:12 | 4 bits |
+| Immediate | 11:0 | 12 bits |
 
 ### 9.2 Instruction Set
 
