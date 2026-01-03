@@ -262,6 +262,12 @@ static bool check_registers_hazrads(Pipeline_s *pipeline, PipelineSM_e stage) {
 		return false;
 	}
 
+	// Skip hazard check for instructions that don't write to a register:
+	uint16_t stage_opcode = pipeline->pipe_stages[stage].instruction.bits.opcode;
+	if (stage_opcode == SW || Opcode_IsBranchResulotion(stage_opcode) || stage_opcode == HALT) {
+		return false;
+	}
+
 	return compare_register(pipeline, pipeline->pipe_stages[stage].instruction.bits.rd, stage);
 }
 

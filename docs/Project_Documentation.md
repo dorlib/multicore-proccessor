@@ -183,20 +183,28 @@ The processor implements a **single delay slot** for branch instructions:
 
 ### 4.4 Data Hazard Detection
 
-Hazards are detected in the Decode stage by checking dependencies:
+Hazards are detected in the Decode stage by checking dependencies between the current instruction's sources and prior instructions' destinations.
+
+**Important**: Hazard detection only applies when the instruction in a later pipeline stage **writes to a register**. Instructions that don't write to registers (SW, branch instructions, HALT) should NOT be checked as producers:
 
 ```c
-// For ALU instructions: check rs and rt as sources
+// Skip hazard check if pipeline stage contains non-writing instruction
+if (stage_opcode == SW || is_branch(stage_opcode) || stage_opcode == HALT)
+    → No hazard from this stage (rd field is NOT a destination)
+
+// For ALU/LW instructions in Decode: check rs and rt as sources
 if (decode.rs == execute.rd || decode.rs == mem.rd || decode.rs == wb.rd ||
     decode.rt == execute.rd || decode.rt == mem.rd || decode.rt == wb.rd)
     → STALL
 
-// For SW instruction: check rd, rs, and rt as sources (rd is the data to store)
+// For SW instruction in Decode: also check rd as source (rd holds data to store)
 if (decode.rd == execute.rd || decode.rd == mem.rd || decode.rd == wb.rd ||
     decode.rs == execute.rd || decode.rs == mem.rd || decode.rs == wb.rd ||
     decode.rt == execute.rd || decode.rt == mem.rd || decode.rt == wb.rd)
     → STALL
 ```
+
+**Bug Fix Note**: An earlier version incorrectly treated the `rd` field of SW and branch instructions as destinations, causing false hazard detection and unnecessary stalls.
 
 ### 4.5 Pipeline Stalls
 
@@ -496,6 +504,11 @@ Memory Read Transaction:
 | tsram0-3.txt | Cache tags | 8 hex digits per line |
 | stats0-3.txt | Statistics | Text format |
 
+**Important Note on memout.txt**: The `memout.txt` file represents the **actual state of main memory** at the end of simulation. Dirty cache lines that have not been explicitly flushed (via eviction or BusRdX snoop) are **NOT** written back to main memory at simulation end. This means:
+- Values modified in cache but not evicted may not appear in memout.txt
+- To see all cached values, check the dsram files
+- This accurately reflects real hardware behavior where cache contents are volatile
+
 ### 10.3 Trace File Formats
 
 #### Core Trace Format
@@ -520,13 +533,15 @@ CYCLE bus_origid bus_cmd bus_addr bus_data bus_shared
 ```
 cycles X
 instructions X
-read hit X
-write hit X
-read miss X
-write miss X
-decode stall X
-mem stall X
+read_hit X
+write_hit X
+read_miss X
+write_miss X
+decode_stall X
+mem_stall X
 ```
+
+**Note**: Field names use underscores (e.g., `decode_stall`, not `decode stall`).
 
 ---
 
@@ -729,12 +744,12 @@ Statistics collected per core:
 |--------|-------------|
 | cycles | Total clock cycles until halt |
 | instructions | Instructions executed (completed WB) |
-| read hit | Cache hits on LW instructions |
-| write hit | Cache hits on SW instructions |
-| read miss | Cache misses on LW instructions |
-| write miss | Cache misses on SW instructions |
-| decode stall | Cycles stalled due to data hazards |
-| mem stall | Cycles stalled due to cache misses |
+| read_hit | Cache hits on LW instructions |
+| write_hit | Cache hits on SW instructions |
+| read_miss | Cache misses on LW instructions |
+| write_miss | Cache misses on SW instructions |
+| decode_stall | Cycles stalled due to data hazards |
+| mem_stall | Cycles stalled due to cache misses |
 
 ---
 
@@ -745,6 +760,49 @@ Statistics collected per core:
 3. **Write-Back Cache**: Reduces memory traffic for write-heavy workloads
 4. **Round-Robin Arbitration**: Ensures fairness among cores
 5. **Direct-Mapped Cache**: Simple design, predictable behavior
+
+---
+
+## Appendix D: Changelog
+
+### Version 1.1 (Bug Fixes)
+
+#### Bug Fix 1: Incorrect RAW Hazard Detection for SW/Branch Instructions
+**File**: `Pipeline.c` (lines 253-269)
+
+**Problem**: The hazard detection logic incorrectly treated the `rd` field of SW instructions, branch instructions, and HALT as a destination register. This caused false hazard detection when:
+- A SW instruction was in Execute/Mem/WB stage (rd holds data to store, not a destination)
+- A branch instruction was in Execute/Mem/WB stage (rd holds branch target, not a destination)
+- A HALT instruction was in pipeline
+
+**Fix**: Added check to skip hazard detection when the instruction in a later pipeline stage is SW, a branch instruction, or HALT:
+```c
+// Skip if the stage instruction doesn't write to a register
+if (stage_opcode == SW || Opcode_IsBranchResulotion(stage_opcode) || stage_opcode == HALT)
+    return false;
+```
+
+#### Bug Fix 2: Statistics File Format Mismatch
+**File**: `Core.c` (lines 166-175)
+
+**Problem**: Stats files used spaces in field names (e.g., `decode stall`, `mem stall`) instead of underscores.
+
+**Fix**: Changed format strings to use underscores:
+- `decode stall` → `decode_stall`
+- `mem stall` → `mem_stall`
+
+#### Bug Fix 3: Incorrect Cache Flush at End of Simulation
+**File**: `Core.c` (lines 77-87)
+
+**Problem**: The `Core_Teardown()` function called `Cache_FlushToMemory()` to write all dirty cache lines to main memory. However, the project specification states that `memout.txt` should represent the **actual state of main memory**, not all cached values.
+
+**Fix**: Disabled the cache flush call in teardown:
+```c
+// NOTE: Per project requirements, memout.txt should represent the actual
+// state of main memory, NOT the cache contents. Dirty cache lines that
+// haven't been evicted should NOT appear in memout.txt.
+// Cache_FlushToMemory(&core->pipeline.cache_data);
+```
 
 ---
 

@@ -76,7 +76,7 @@ void Core_Iter(Core_s* core) {
  * @param core Pointer to the core structure.
  */
 void Core_Teaddown(Core_s* core) {
-	Cache_FlushToMemory(&core->pipeline.cache_data);
+	// Cache_FlushToMemory(&core->pipeline.cache_data);
 	print_register_file(core);
 	Cache_PrintData(&core->pipeline.cache_data,
 		core->core_files.DsRamFile, core->core_files.TsRamFile);
@@ -170,6 +170,6 @@ static void print_statistics(Core_s* core) {
 	fprintf(core->core_files.StatsFile, "write_hit %d\n", core->pipeline.cache_data.statistics.write_hits);
 	fprintf(core->core_files.StatsFile, "read_miss %d\n", core->pipeline.cache_data.statistics.read_misses);
 	fprintf(core->core_files.StatsFile, "write_miss %d\n", core->pipeline.cache_data.statistics.write_misses);
-	fprintf(core->core_files.StatsFile, "decode stall %d\n", core->pipeline.statistics.decode_stalls);
-	fprintf(core->core_files.StatsFile, "mem stall %d\n", core->pipeline.statistics.mem_stalls);
+	fprintf(core->core_files.StatsFile, "decode_stall %d\n", core->pipeline.statistics.decode_stalls);
+	fprintf(core->core_files.StatsFile, "mem_stall %d\n", core->pipeline.statistics.mem_stalls);
 }
