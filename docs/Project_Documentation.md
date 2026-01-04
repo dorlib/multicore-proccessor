@@ -1,11 +1,18 @@
 # Multicore Processor Simulator
+
 ## Project Documentation
 
 ---
 
 **Course**: Computer Architecture  
 **Project**: Multicore Processor with Cache Coherence  
-**Date**: December 2025
+**Date**: January 2026
+
+#### Student
+
+- Dor Liberman 318635463
+- Itamar Kantor 212301337
+- Aviad Sinuani 214309643
 
 ---
 
@@ -49,29 +56,29 @@ The simulator is written in C and produces detailed trace files for debugging an
 flowchart TB
     subgraph BUS["SYSTEM BUS (Round-Robin Arbitration)"]
     end
-    
+
     subgraph CORE0["CORE 0"]
         P0["Pipeline\n(5 stages)"]
         C0["Cache (512 words)\nDSRAM+TSRAM"]
     end
-    
+
     subgraph CORE1["CORE 1"]
         P1["Pipeline\n(5 stages)"]
         C1["Cache (512 words)\nDSRAM+TSRAM"]
     end
-    
+
     subgraph CORE2["CORE 2"]
         P2["Pipeline\n(5 stages)"]
         C2["Cache (512 words)\nDSRAM+TSRAM"]
     end
-    
+
     subgraph CORE3["CORE 3"]
         P3["Pipeline\n(5 stages)"]
         C3["Cache (512 words)\nDSRAM+TSRAM"]
     end
-    
+
     MEM[("MAIN MEMORY\n2^21 words\n16-cycle latency")]
-    
+
     BUS --- CORE0
     BUS --- CORE1
     BUS --- CORE2
@@ -84,15 +91,15 @@ flowchart TB
 
 ### 2.2 System Parameters
 
-| Component | Specification |
-|-----------|---------------|
-| Number of Cores | 4 |
-| Address Space | 21 bits (2,097,152 words) |
-| Word Size | 32 bits |
-| Instruction Memory | 1024 words per core |
-| Data Cache | 512 words per core |
-| Cache Block Size | 8 words |
-| Memory Latency | 16 cycles + 8 words transfer |
+| Component          | Specification                |
+| ------------------ | ---------------------------- |
+| Number of Cores    | 4                            |
+| Address Space      | 21 bits (2,097,152 words)    |
+| Word Size          | 32 bits                      |
+| Instruction Memory | 1024 words per core          |
+| Data Cache         | 512 words per core           |
+| Cache Block Size   | 8 words                      |
+| Memory Latency     | 16 cycles + 8 words transfer |
 
 ---
 
@@ -102,11 +109,11 @@ flowchart TB
 
 Each core has 16 registers (32-bit each):
 
-| Register | Name | Description |
-|----------|------|-------------|
-| R0 | $zero | Constant zero (read-only) |
-| R1 | $imm | Sign-extended immediate from instruction |
-| R2-R15 | General | General-purpose registers |
+| Register | Name    | Description                              |
+| -------- | ------- | ---------------------------------------- |
+| R0       | $zero   | Constant zero (read-only)                |
+| R1       | $imm    | Sign-extended immediate from instruction |
+| R2-R15   | General | General-purpose registers                |
 
 ### 3.2 Program Counter
 
@@ -122,7 +129,7 @@ stateDiagram-v2
     RUNNING --> HALTING : HALT instruction
     HALTING --> HALTED : Pipeline empty
     HALTED --> [*]
-    
+
     RUNNING : Execute cycles
     HALTING : Drain pipeline
     HALTED : Core stopped
@@ -142,37 +149,39 @@ flowchart LR
         F1["PC→IMEM"]
         F2["IR←Inst"]
     end
-    
+
     subgraph DECODE
         D1["RegRead"]
         D2["Hazard"]
     end
-    
+
     subgraph EXECUTE
         E1["ALU"]
         E2["Branch"]
     end
-    
+
     subgraph MEM
         M1["Cache"]
         M2["Access"]
     end
-    
+
     subgraph WB
         W1["RegWrite"]
     end
-    
+
     FETCH --> DECODE --> EXECUTE --> MEM --> WB
 ```
 
 ### 4.2 Stage Details
 
 #### Fetch Stage
+
 - Reads instruction from instruction memory at PC
 - Increments PC (unless stalled)
 - Passes instruction to Decode stage
 
 #### Decode Stage
+
 - Decodes instruction fields (opcode, rd, rs, rt, immediate)
 - Reads register values
 - **Resolves branches** (branch decision made here)
@@ -180,22 +189,26 @@ flowchart LR
 - No forwarding - all hazards resolved by stalling
 
 #### Execute Stage
+
 - Performs ALU operations
 - Calculates memory addresses for LW/SW
 - Computes branch targets
 
 #### Memory Stage
+
 - Accesses data cache for LW/SW instructions
 - **Stalls on cache miss** until data available
 - Handles MESI protocol transactions
 
 #### Writeback Stage
+
 - Writes results back to register file
 - Updates R2-R15 (R0 and R1 are read-only)
 
 ### 4.3 Delay Slot
 
 The processor implements a **single delay slot** for branch instructions:
+
 - The instruction immediately after a branch **always executes**
 - This is true regardless of whether the branch is taken
 - Compilers/assemblers must fill the delay slot appropriately
@@ -204,35 +217,16 @@ The processor implements a **single delay slot** for branch instructions:
 
 Hazards are detected in the Decode stage by checking dependencies between the current instruction's sources and prior instructions' destinations.
 
-**Important**: Hazard detection only applies when the instruction in a later pipeline stage **writes to a register**. Instructions that don't write to registers (SW, branch instructions, HALT) should NOT be checked as producers:
-
-```c
-// Skip hazard check if pipeline stage contains non-writing instruction
-if (stage_opcode == SW || is_branch(stage_opcode) || stage_opcode == HALT)
-    return false;  // No hazard from this stage (rd field is NOT a destination)
-
-// For ALU/LW instructions in Decode: check rs and rt as sources
-if (decode.rs == execute.rd || decode.rs == mem.rd || decode.rs == wb.rd ||
-    decode.rt == execute.rd || decode.rt == mem.rd || decode.rt == wb.rd)
-    stall();  // STALL
-
-// For SW instruction in Decode: also check rd as source (rd holds data to store)
-if (decode.rd == execute.rd || decode.rd == mem.rd || decode.rd == wb.rd ||
-    decode.rs == execute.rd || decode.rs == mem.rd || decode.rs == wb.rd ||
-    decode.rt == execute.rd || decode.rt == mem.rd || decode.rt == wb.rd)
-    stall();  // STALL
-```
-
-**Bug Fix Note**: An earlier version incorrectly treated the `rd` field of SW and branch instructions as destinations, causing false hazard detection and unnecessary stalls.
+**Important**: Hazard detection only applies when the instruction in a later pipeline stage **writes to a register**. Instructions that don't write to registers (SW, branch instructions, HALT) should NOT be checked as producers.
 
 ### 4.5 Pipeline Stalls
 
 Two types of stalls:
 
-| Stall Type | Cause | Resolution |
-|------------|-------|------------|
+| Stall Type   | Cause             | Resolution                    |
+| ------------ | ----------------- | ----------------------------- |
 | Decode Stall | Data hazard (RAW) | Wait for producer to reach WB |
-| Memory Stall | Cache miss | Wait for bus transaction |
+| Memory Stall | Cache miss        | Wait for bus transaction      |
 
 ---
 
@@ -274,24 +268,24 @@ packet-beta
   9-20: "TAG (12)"
 ```
 
-| Field | Bits | Description |
-|-------|------|-------------|
-| TAG | 20:9 | Identifies which memory block is cached |
-| INDEX | 8:3 | Selects one of 64 cache lines |
-| OFFSET | 2:0 | Selects one of 8 words within the block |
+| Field  | Bits | Description                             |
+| ------ | ---- | --------------------------------------- |
+| TAG    | 20:9 | Identifies which memory block is cached |
+| INDEX  | 8:3  | Selects one of 64 cache lines           |
+| OFFSET | 2:0  | Selects one of 8 words within the block |
 
 ### 5.3 Cache Parameters
 
-| Parameter | Value |
-|-----------|-------|
-| Total Size | 512 words (2KB) |
-| Block Size | 8 words (32 bytes) |
-| Number of Lines | 64 |
-| Associativity | Direct-mapped |
-| Write Policy | Write-back, Write-allocate |
-| Tag Bits | 12 |
-| Index Bits | 6 |
-| Offset Bits | 3 |
+| Parameter       | Value                      |
+| --------------- | -------------------------- |
+| Total Size      | 512 words (2KB)            |
+| Block Size      | 8 words (32 bytes)         |
+| Number of Lines | 64                         |
+| Associativity   | Direct-mapped              |
+| Write Policy    | Write-back, Write-allocate |
+| Tag Bits        | 12                         |
+| Index Bits      | 6                          |
+| Offset Bits     | 3                          |
 
 ### 5.4 Write Policy
 
@@ -304,33 +298,33 @@ packet-beta
 
 ### 6.1 State Encoding
 
-| Code | State | Description |
-|------|-------|-------------|
-| 0 | Invalid (I) | Line not valid, must fetch from memory |
-| 1 | Shared (S) | Clean copy, may exist in other caches |
-| 2 | Exclusive (E) | Clean copy, no other cache has it |
-| 3 | Modified (M) | Dirty copy, must write back before eviction |
+| Code | State         | Description                                 |
+| ---- | ------------- | ------------------------------------------- |
+| 0    | Invalid (I)   | Line not valid, must fetch from memory      |
+| 1    | Shared (S)    | Clean copy, may exist in other caches       |
+| 2    | Exclusive (E) | Clean copy, no other cache has it           |
+| 3    | Modified (M)  | Dirty copy, must write back before eviction |
 
 ### 6.2 State Transition Diagram
 
 ```mermaid
 stateDiagram-v2
     [*] --> Invalid
-    
+
     Invalid --> Exclusive : PrRd (miss, no sharers)
     Invalid --> Shared : PrRd (miss, sharers exist)
     Invalid --> Modified : PrWr (miss)
-    
+
     Exclusive --> Shared : BusRd (snoop)
     Exclusive --> Invalid : BusRdX (snoop)
     Exclusive --> Modified : PrWr (silent upgrade)
-    
+
     Shared --> Modified : PrWr (upgrade)
     Shared --> Invalid : BusRdX (snoop)
-    
+
     Modified --> Shared : BusRd (snoop, flush)
     Modified --> Invalid : BusRdX (snoop, flush)
-    
+
     Invalid : State = 0
     Shared : State = 1
     Exclusive : State = 2
@@ -339,26 +333,26 @@ stateDiagram-v2
 
 ### 6.3 Bus Commands
 
-| Command | Code | Description |
-|---------|------|-------------|
-| No-Op | 0 | No bus activity |
-| BusRd | 1 | Read request (for read miss) |
-| BusRdX | 2 | Read-exclusive request (for write miss) |
-| Flush | 3 | Write modified block to memory |
+| Command | Code | Description                             |
+| ------- | ---- | --------------------------------------- |
+| No-Op   | 0    | No bus activity                         |
+| BusRd   | 1    | Read request (for read miss)            |
+| BusRdX  | 2    | Read-exclusive request (for write miss) |
+| Flush   | 3    | Write modified block to memory          |
 
 ### 6.4 Snoop Logic
 
 When a core observes a bus transaction:
 
-| Current State | Bus Command | Action | New State |
-|---------------|-------------|--------|-----------|
-| Modified | BusRd | Flush data, set shared | Shared |
-| Modified | BusRdX | Flush data, invalidate | Invalid |
-| Exclusive | BusRd | Set shared signal | Shared |
-| Exclusive | BusRdX | Invalidate | Invalid |
-| Shared | BusRd | Set shared signal | Shared |
-| Shared | BusRdX | Invalidate | Invalid |
-| Invalid | Any | No action | Invalid |
+| Current State | Bus Command | Action                 | New State |
+| ------------- | ----------- | ---------------------- | --------- |
+| Modified      | BusRd       | Flush data, set shared | Shared    |
+| Modified      | BusRdX      | Flush data, invalidate | Invalid   |
+| Exclusive     | BusRd       | Set shared signal      | Shared    |
+| Exclusive     | BusRdX      | Invalidate             | Invalid   |
+| Shared        | BusRd       | Set shared signal      | Shared    |
+| Shared        | BusRdX      | Invalidate             | Invalid   |
+| Invalid       | Any         | No action              | Invalid   |
 
 ---
 
@@ -368,20 +362,20 @@ When a core observes a bus transaction:
 
 ```mermaid
 packet-beta
-  0-1: "bus_origid (2)"
-  2-3: "bus_cmd (2)"
-  4-24: "bus_addr (21)"
-  25-56: "bus_data (32)"
-  57: "shared"
+  0-2: "bus_origid (3)"
+  3-4: "bus_cmd (2)"
+  5-25: "bus_addr (21)"
+  26-57: "bus_data (32)"
+  58: "shared"
 ```
 
-| Signal | Width | Description |
-|--------|-------|-------------|
-| bus_origid | 2 bits | Requesting core ID (0-3) |
-| bus_cmd | 2 bits | Command (NoOp/BusRd/BusRdX/Flush) |
-| bus_addr | 21 bits | Memory address |
-| bus_data | 32 bits | Data word (for Flush) |
-| bus_shared | 1 bit | Shared signal from snoopers |
+| Signal     | Width   | Description                                 |
+| ---------- | ------- | ------------------------------------------- |
+| bus_origid | 3 bits  | Originator: 0-3=core, 4=main memory         |
+| bus_cmd    | 2 bits  | Command (NoOp/BusRd/BusRdX/Flush) |
+| bus_addr   | 21 bits | Memory address                    |
+| bus_data   | 32 bits | Data word (for Flush)             |
+| bus_shared | 1 bit   | Shared signal from snoopers       |
 
 ### 7.2 Round-Robin Arbitration
 
@@ -396,6 +390,7 @@ flowchart LR
 ```
 
 **Algorithm:**
+
 1. Check from current priority core
 2. Grant to first requesting core in order
 3. After transaction, priority moves to next core
@@ -403,6 +398,7 @@ flowchart LR
 ### 7.3 Bus Transaction Sequence
 
 #### Read Miss (BusRd)
+
 ```mermaid
 gantt
     title BusRd Transaction Timeline
@@ -416,6 +412,7 @@ gantt
 ```
 
 #### Write Miss (BusRdX)
+
 ```mermaid
 gantt
     title BusRdX Transaction Timeline
@@ -429,6 +426,7 @@ gantt
 ```
 
 #### Flush (Modified → Memory)
+
 ```mermaid
 gantt
     title Flush Transaction Timeline
@@ -445,13 +443,13 @@ gantt
 
 ### 8.1 Specifications
 
-| Parameter | Value |
-|-----------|-------|
-| Size | 2^21 words (8 MB) |
-| Address Width | 21 bits |
-| Word Width | 32 bits |
-| Read Latency | 16 cycles |
-| Transfer Rate | 1 word per cycle |
+| Parameter      | Value              |
+| -------------- | ------------------ |
+| Size           | 2^21 words (8 MB)  |
+| Address Width  | 21 bits            |
+| Word Width     | 32 bits            |
+| Read Latency   | 16 cycles          |
+| Transfer Rate  | 1 word per cycle   |
 | Block Transfer | 8 words (8 cycles) |
 
 ### 8.2 Memory Timing
@@ -460,7 +458,7 @@ gantt
 sequenceDiagram
     participant Cache
     participant Memory
-    
+
     Cache->>Memory: Read Request
     Note over Memory: 16 cycles latency
     Memory-->>Cache: Word 0
@@ -489,56 +487,56 @@ packet-beta
   24-31: "Opcode (8)"
 ```
 
-| Field | Bits | Width |
-|-------|------|-------|
-| Opcode | 31:24 | 8 bits |
-| Rd | 23:20 | 4 bits |
-| Rs | 19:16 | 4 bits |
-| Rt | 15:12 | 4 bits |
-| Immediate | 11:0 | 12 bits |
+| Field     | Bits  | Width   |
+| --------- | ----- | ------- |
+| Opcode    | 31:24 | 8 bits  |
+| Rd        | 23:20 | 4 bits  |
+| Rs        | 19:16 | 4 bits  |
+| Rt        | 15:12 | 4 bits  |
+| Immediate | 11:0  | 12 bits |
 
 ### 9.2 Instruction Set
 
 #### Arithmetic/Logic Instructions
 
-| Opcode | Mnemonic | Operation |
-|--------|----------|-----------|
-| 0 | ADD | R[rd] = R[rs] + R[rt] |
-| 1 | SUB | R[rd] = R[rs] - R[rt] |
-| 2 | AND | R[rd] = R[rs] & R[rt] |
-| 3 | OR | R[rd] = R[rs] \| R[rt] |
-| 4 | XOR | R[rd] = R[rs] ^ R[rt] |
-| 5 | MUL | R[rd] = R[rs] × R[rt] |
-| 6 | SLL | R[rd] = R[rs] << R[rt] |
-| 7 | SRA | R[rd] = R[rs] >> R[rt] (arithmetic) |
-| 8 | SRL | R[rd] = R[rs] >> R[rt] (logical) |
+| Opcode | Mnemonic | Operation                           |
+| ------ | -------- | ----------------------------------- |
+| 0      | ADD      | R[rd] = R[rs] + R[rt]               |
+| 1      | SUB      | R[rd] = R[rs] - R[rt]               |
+| 2      | AND      | R[rd] = R[rs] & R[rt]               |
+| 3      | OR       | R[rd] = R[rs] \| R[rt]              |
+| 4      | XOR      | R[rd] = R[rs] ^ R[rt]               |
+| 5      | MUL      | R[rd] = R[rs] × R[rt]               |
+| 6      | SLL      | R[rd] = R[rs] << R[rt]              |
+| 7      | SRA      | R[rd] = R[rs] >> R[rt] (arithmetic) |
+| 8      | SRL      | R[rd] = R[rs] >> R[rt] (logical)    |
 
 #### Branch Instructions
 
-| Opcode | Mnemonic | Condition |
-|--------|----------|-----------|
-| 9 | BEQ | Branch if R[rs] == R[rt] |
-| 10 | BNE | Branch if R[rs] != R[rt] |
-| 11 | BLT | Branch if R[rs] < R[rt] |
-| 12 | BGT | Branch if R[rs] > R[rt] |
-| 13 | BLE | Branch if R[rs] <= R[rt] |
-| 14 | BGE | Branch if R[rs] >= R[rt] |
-| 15 | JAL | Jump and link (R[15] = PC+1) |
+| Opcode | Mnemonic | Condition                    |
+| ------ | -------- | ---------------------------- |
+| 9      | BEQ      | Branch if R[rs] == R[rt]     |
+| 10     | BNE      | Branch if R[rs] != R[rt]     |
+| 11     | BLT      | Branch if R[rs] < R[rt]      |
+| 12     | BGT      | Branch if R[rs] > R[rt]      |
+| 13     | BLE      | Branch if R[rs] <= R[rt]     |
+| 14     | BGE      | Branch if R[rs] >= R[rt]     |
+| 15     | JAL      | Jump and link (R[15] = PC+1) |
 
 **Note**: Branch target is R[rd][9:0]. Delay slot always executes.
 
 #### Memory Instructions
 
-| Opcode | Mnemonic | Operation |
-|--------|----------|-----------|
-| 16 | LW | R[rd] = MEM[R[rs] + R[rt]] |
-| 17 | SW | MEM[R[rs] + R[rt]] = R[rd] |
+| Opcode | Mnemonic | Operation                  |
+| ------ | -------- | -------------------------- |
+| 16     | LW       | R[rd] = MEM[R[rs] + R[rt]] |
+| 17     | SW       | MEM[R[rs] + R[rt]] = R[rd] |
 
 #### Control Instructions
 
-| Opcode | Mnemonic | Operation |
-|--------|----------|-----------|
-| 20 | HALT | Stop this core |
+| Opcode | Mnemonic | Operation      |
+| ------ | -------- | -------------- |
+| 20     | HALT     | Stop this core |
 
 ---
 
@@ -546,24 +544,25 @@ packet-beta
 
 ### 10.1 Input Files
 
-| File | Description | Format |
-|------|-------------|--------|
-| imem0-3.txt | Instruction memory | 8 hex digits per line |
-| memin.txt | Initial main memory | 8 hex digits per line |
+| File        | Description         | Format                |
+| ----------- | ------------------- | --------------------- |
+| imem0-3.txt | Instruction memory  | 8 hex digits per line |
+| memin.txt   | Initial main memory | 8 hex digits per line |
 
 ### 10.2 Output Files
 
-| File | Description | Format |
-|------|-------------|--------|
-| memout.txt | Final main memory | 8 hex digits per line |
-| regout0-3.txt | Final registers (R2-R15) | 8 hex digits per line |
-| core0-3trace.txt | Pipeline trace | See below |
-| bustrace.txt | Bus transactions | See below |
-| dsram0-3.txt | Cache data | 8 hex digits per line |
-| tsram0-3.txt | Cache tags | 8 hex digits per line |
-| stats0-3.txt | Statistics | Text format |
+| File             | Description              | Format                |
+| ---------------- | ------------------------ | --------------------- |
+| memout.txt       | Final main memory        | 8 hex digits per line |
+| regout0-3.txt    | Final registers (R2-R15) | 8 hex digits per line |
+| core0-3trace.txt | Pipeline trace           | See below             |
+| bustrace.txt     | Bus transactions         | See below             |
+| dsram0-3.txt     | Cache data               | 8 hex digits per line |
+| tsram0-3.txt     | Cache tags               | 8 hex digits per line |
+| stats0-3.txt     | Statistics               | Text format           |
 
 **Important Note on memout.txt**: The `memout.txt` file represents the **actual state of main memory** at the end of simulation. Dirty cache lines that have not been explicitly flushed (via eviction or BusRdX snoop) are **NOT** written back to main memory at simulation end. This means:
+
 - Values modified in cache but not evicted may not appear in memout.txt
 - To see all cached values, check the dsram files
 - This accurately reflects real hardware behavior where cache contents are volatile
@@ -571,17 +570,21 @@ packet-beta
 ### 10.3 Trace File Formats
 
 #### Core Trace Format
+
 ```
 CYCLE FETCH DECODE EXEC MEM WB R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15
 ```
+
 - CYCLE: Decimal cycle number
 - FETCH-WB: 3 hex digits for PC, or "---" if inactive
 - R2-R15: 8 hex digits each
 
 #### Bus Trace Format
+
 ```
 CYCLE bus_origid bus_cmd bus_addr bus_data bus_shared
 ```
+
 - CYCLE: Decimal
 - bus_origid, bus_cmd, bus_shared: 1 hex digit
 - bus_addr: 6 hex digits
@@ -637,6 +640,7 @@ src/
 ### 11.2 Key Data Structures
 
 #### Core Structure
+
 ```c
 typedef struct Core {
     int id;                    // Core ID (0-3)
@@ -651,6 +655,7 @@ typedef struct Core {
 ```
 
 #### Cache Structure
+
 ```c
 typedef struct Cache {
     uint32_t dsram[512];       // Data SRAM
@@ -664,19 +669,19 @@ typedef struct Cache {
 ```c
 while (!all_cores_halted()) {
     global_cycle++;
-    
+
     // Phase 1: Bus arbitration and transactions
     handle_bus_transactions();
-    
+
     // Phase 2: Snoop all caches
     for each core:
         snoop_cache(core);
-    
+
     // Phase 3: Advance pipelines
     for each core:
         if (core.state != HALTED)
             execute_pipeline_cycle(core);
-    
+
     // Phase 4: Write trace files
     write_traces();
 }
@@ -691,11 +696,13 @@ while (!all_cores_halted()) {
 **Description**: Four cores increment a shared counter at memory address 0.
 
 **Algorithm**:
+
 - Each core increments the counter 128 times
 - Cores take turns in round-robin order (0→1→2→3→0→...)
 - Synchronization uses memory-based flags
 
 **Expected Result**:
+
 - memout.txt[0] = 0x00000200 (512)
 
 ### 12.2 Serial Matrix Multiply (mulserial/)
@@ -710,6 +717,7 @@ while (!all_cores_halted()) {
 | 0x200-0x2FF | Result C (16×16) |
 
 **Algorithm**:
+
 ```
 for i = 0 to 15:
     for j = 0 to 15:
@@ -723,6 +731,7 @@ for i = 0 to 15:
 **Description**: Four cores collaborate on 16×16 matrix multiplication.
 
 **Work Distribution**:
+
 - Core 0: Rows 0-3
 - Core 1: Rows 4-7
 - Core 2: Rows 8-11
@@ -749,17 +758,19 @@ for i = 0 to 15:
 ### 13.3 Running the Simulator
 
 **With command-line arguments**:
+
 ```
-sim.exe imem0.txt imem1.txt imem2.txt imem3.txt memin.txt memout.txt 
-        regout0.txt regout1.txt regout2.txt regout3.txt 
-        core0trace.txt core1trace.txt core2trace.txt core3trace.txt 
-        bustrace.txt 
-        dsram0.txt dsram1.txt dsram2.txt dsram3.txt 
-        tsram0.txt tsram1.txt tsram2.txt tsram3.txt 
+sim.exe imem0.txt imem1.txt imem2.txt imem3.txt memin.txt memout.txt
+        regout0.txt regout1.txt regout2.txt regout3.txt
+        core0trace.txt core1trace.txt core2trace.txt core3trace.txt
+        bustrace.txt
+        dsram0.txt dsram1.txt dsram2.txt dsram3.txt
+        tsram0.txt tsram1.txt tsram2.txt tsram3.txt
         stats0.txt stats1.txt stats2.txt stats3.txt
 ```
 
 **With default filenames** (files in same directory):
+
 ```
 sim.exe
 ```
@@ -776,22 +787,22 @@ asm.exe program.asm imem.txt
 
 ## Appendix A: MESI State Truth Table
 
-| Current | Event | Next | Bus Action | Notes |
-|---------|-------|------|------------|-------|
-| I | PrRd | E/S | BusRd | E if no sharers, S if shared |
-| I | PrWr | M | BusRdX | Invalidates other copies |
-| S | PrRd | S | - | Hit, no bus activity |
-| S | PrWr | M | BusRdX | Upgrade, invalidates others |
-| S | BusRd | S | - | Assert shared signal |
-| S | BusRdX | I | - | Invalidate |
-| E | PrRd | E | - | Hit, no bus activity |
-| E | PrWr | M | - | Silent upgrade |
-| E | BusRd | S | - | Assert shared signal |
-| E | BusRdX | I | - | Invalidate |
-| M | PrRd | M | - | Hit |
-| M | PrWr | M | - | Hit |
-| M | BusRd | S | Flush | Write-back, share |
-| M | BusRdX | I | Flush | Write-back, invalidate |
+| Current | Event  | Next | Bus Action | Notes                        |
+| ------- | ------ | ---- | ---------- | ---------------------------- |
+| I       | PrRd   | E/S  | BusRd      | E if no sharers, S if shared |
+| I       | PrWr   | M    | BusRdX     | Invalidates other copies     |
+| S       | PrRd   | S    | -          | Hit, no bus activity         |
+| S       | PrWr   | M    | BusRdX     | Upgrade, invalidates others  |
+| S       | BusRd  | S    | -          | Assert shared signal         |
+| S       | BusRdX | I    | -          | Invalidate                   |
+| E       | PrRd   | E    | -          | Hit, no bus activity         |
+| E       | PrWr   | M    | -          | Silent upgrade               |
+| E       | BusRd  | S    | -          | Assert shared signal         |
+| E       | BusRdX | I    | -          | Invalidate                   |
+| M       | PrRd   | M    | -          | Hit                          |
+| M       | PrWr   | M    | -          | Hit                          |
+| M       | BusRd  | S    | Flush      | Write-back, share            |
+| M       | BusRdX | I    | Flush      | Write-back, invalidate       |
 
 ---
 
@@ -799,16 +810,16 @@ asm.exe program.asm imem.txt
 
 Statistics collected per core:
 
-| Metric | Description |
-|--------|-------------|
-| cycles | Total clock cycles until halt |
+| Metric       | Description                          |
+| ------------ | ------------------------------------ |
+| cycles       | Total clock cycles until halt        |
 | instructions | Instructions executed (completed WB) |
-| read_hit | Cache hits on LW instructions |
-| write_hit | Cache hits on SW instructions |
-| read_miss | Cache misses on LW instructions |
-| write_miss | Cache misses on SW instructions |
-| decode_stall | Cycles stalled due to data hazards |
-| mem_stall | Cycles stalled due to cache misses |
+| read_hit     | Cache hits on LW instructions        |
+| write_hit    | Cache hits on SW instructions        |
+| read_miss    | Cache misses on LW instructions      |
+| write_miss   | Cache misses on SW instructions      |
+| decode_stall | Cycles stalled due to data hazards   |
+| mem_stall    | Cycles stalled due to cache misses   |
 
 ---
 
@@ -819,50 +830,3 @@ Statistics collected per core:
 3. **Write-Back Cache**: Reduces memory traffic for write-heavy workloads
 4. **Round-Robin Arbitration**: Ensures fairness among cores
 5. **Direct-Mapped Cache**: Simple design, predictable behavior
-
----
-
-## Appendix D: Changelog
-
-### Version 1.1 (Bug Fixes)
-
-#### Bug Fix 1: Incorrect RAW Hazard Detection for SW/Branch Instructions
-**File**: `Pipeline.c` (lines 253-269)
-
-**Problem**: The hazard detection logic incorrectly treated the `rd` field of SW instructions, branch instructions, and HALT as a destination register. This caused false hazard detection when:
-- A SW instruction was in Execute/Mem/WB stage (rd holds data to store, not a destination)
-- A branch instruction was in Execute/Mem/WB stage (rd holds branch target, not a destination)
-- A HALT instruction was in pipeline
-
-**Fix**: Added check to skip hazard detection when the instruction in a later pipeline stage is SW, a branch instruction, or HALT:
-```c
-// Skip if the stage instruction doesn't write to a register
-if (stage_opcode == SW || Opcode_IsBranchResulotion(stage_opcode) || stage_opcode == HALT)
-    return false;
-```
-
-#### Bug Fix 2: Statistics File Format Mismatch
-**File**: `Core.c` (lines 166-175)
-
-**Problem**: Stats files used spaces in field names (e.g., `decode stall`, `mem stall`) instead of underscores.
-
-**Fix**: Changed format strings to use underscores:
-- `decode stall` → `decode_stall`
-- `mem stall` → `mem_stall`
-
-#### Bug Fix 3: Incorrect Cache Flush at End of Simulation
-**File**: `Core.c` (lines 77-87)
-
-**Problem**: The `Core_Teardown()` function called `Cache_FlushToMemory()` to write all dirty cache lines to main memory. However, the project specification states that `memout.txt` should represent the **actual state of main memory**, not all cached values.
-
-**Fix**: Disabled the cache flush call in teardown:
-```c
-// NOTE: Per project requirements, memout.txt should represent the actual
-// state of main memory, NOT the cache contents. Dirty cache lines that
-// haven't been evicted should NOT appear in memout.txt.
-// Cache_FlushToMemory(&core->pipeline.cache_data);
-```
-
----
-
-*End of Documentation*
