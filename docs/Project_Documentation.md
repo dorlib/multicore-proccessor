@@ -30,7 +30,6 @@
 10. [File Formats](#10-file-formats)
 11. [Implementation Details](#11-implementation-details)
 12. [Test Programs](#12-test-programs)
-13. [Building and Running](#13-building-and-running)
 
 ---
 
@@ -58,26 +57,26 @@ flowchart TB
     end
 
     subgraph CORE0["CORE 0"]
-        P0["Pipeline\n(5 stages)"]
-        C0["Cache (512 words)\nDSRAM+TSRAM"]
+        P0["Pipeline (5 stages)"]
+        C0["Cache (512 words) DSRAM+TSRAM"]
     end
 
     subgraph CORE1["CORE 1"]
-        P1["Pipeline\n(5 stages)"]
-        C1["Cache (512 words)\nDSRAM+TSRAM"]
+        P1["Pipeline (5 stages)"]
+        C1["Cache (512 words) DSRAM+TSRAM"]
     end
 
     subgraph CORE2["CORE 2"]
-        P2["Pipeline\n(5 stages)"]
-        C2["Cache (512 words)\nDSRAM+TSRAM"]
+        P2["Pipeline (5 stages)"]
+        C2["Cache (512 words) DSRAM+TSRAM"]
     end
 
     subgraph CORE3["CORE 3"]
-        P3["Pipeline\n(5 stages)"]
-        C3["Cache (512 words)\nDSRAM+TSRAM"]
+        P3["Pipeline (5 stages)"]
+        C3["Cache (512 words) DSRAM+TSRAM"]
     end
 
-    MEM[("MAIN MEMORY\n2^21 words\n16-cycle latency")]
+    MEM[("MAIN MEMORY 2^21 words\n16-cycle latency")]
 
     BUS --- CORE0
     BUS --- CORE1
@@ -237,15 +236,15 @@ Two types of stalls:
 ```mermaid
 block-beta
     columns 1
-    block:CACHE["CACHE (512 words)"]
+    block:CACHE[" "]
         columns 1
         A["64 cache lines × 8 words per line = 512 words"]
-        block:TSRAM["TSRAM (Tag + State RAM) - 64 entries"]
+        block:TSRAM[" "]
             columns 2
             B["MESI (2 bits)"]
             C["TAG (12 bits)"]
         end
-        block:DSRAM["DSRAM (Data RAM) - 512 entries (32-bit words)"]
+        block:DSRAM[" "]
             columns 8
             D0["Word 0"]
             D1["Word 1"]
@@ -309,26 +308,33 @@ packet-beta
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Invalid
+    direction LR
 
-    Invalid --> Exclusive : PrRd (miss, no sharers)
-    Invalid --> Shared : PrRd (miss, sharers exist)
-    Invalid --> Modified : PrWr (miss)
+    %% הגדרת המצבים עם טקסט ברור
+    I : Invalid\n(State=0)
+    S : Shared\n(State=1)
+    E : Exclusive\n(State=2)
+    M : Modified\n(State=3)
 
-    Exclusive --> Shared : BusRd (snoop)
-    Exclusive --> Invalid : BusRdX (snoop)
-    Exclusive --> Modified : PrWr (silent upgrade)
+    [*] --> I
 
-    Shared --> Modified : PrWr (upgrade)
-    Shared --> Invalid : BusRdX (snoop)
+    %% מעברים מ-Invalid
+    I --> E : PrRd (miss,<br/>no sharers)
+    I --> S : PrRd (miss,<br/>sharers exist)
+    I --> M : PrWr (miss)
 
-    Modified --> Shared : BusRd (snoop, flush)
-    Modified --> Invalid : BusRdX (snoop, flush)
+    %% מעברים מ-Exclusive
+    E --> S : BusRd (snoop)
+    E --> I : BusRdX (snoop)
+    E --> M : PrWr (silent<br/>upgrade)
 
-    Invalid : State = 0
-    Shared : State = 1
-    Exclusive : State = 2
-    Modified : State = 3
+    %% מעברים מ-Shared
+    S --> M : PrWr (upgrade)
+    S --> I : BusRdX (snoop)
+
+    %% מעברים מ-Modified
+    M --> S : BusRd (snoop,<br/>flush)
+    M --> I : BusRdX (snoop,<br/>flush)
 ```
 
 ### 6.3 Bus Commands
@@ -691,7 +697,7 @@ while (!all_cores_halted()) {
 
 ## 12. Test Programs
 
-### 12.1 Counter Test (counter/)
+### 12.1 Counter Test (counter)
 
 **Description**: Four cores increment a shared counter at memory address 0.
 
@@ -705,7 +711,7 @@ while (!all_cores_halted()) {
 
 - memout.txt[0] = 0x00000200 (512)
 
-### 12.2 Serial Matrix Multiply (mulserial/)
+### 12.2 Serial Matrix Multiply (mulserial)
 
 **Description**: Single-core 16×16 matrix multiplication.
 
@@ -726,7 +732,7 @@ for i = 0 to 15:
             C[i][j] += A[i][k] * B[k][j]
 ```
 
-### 12.3 Parallel Matrix Multiply (mulparallel/)
+### 12.3 Parallel Matrix Multiply (mulparallel)
 
 **Description**: Four cores collaborate on 16×16 matrix multiplication.
 
@@ -738,50 +744,6 @@ for i = 0 to 15:
 - Core 3: Rows 12-15
 
 **Expected Result**: Same as serial multiply, faster execution.
-
----
-
-## 13. Building and Running
-
-### 13.1 Build Requirements
-
-- Visual Studio Community Edition (Windows)
-- C compiler with C99 support
-
-### 13.2 Build Instructions
-
-1. Open `MulticoreProcessor.sln` in Visual Studio
-2. Select Release configuration
-3. Build → Build Solution (Ctrl+Shift+B)
-4. Executable: `sim.exe`
-
-### 13.3 Running the Simulator
-
-**With command-line arguments**:
-
-```
-sim.exe imem0.txt imem1.txt imem2.txt imem3.txt memin.txt memout.txt
-        regout0.txt regout1.txt regout2.txt regout3.txt
-        core0trace.txt core1trace.txt core2trace.txt core3trace.txt
-        bustrace.txt
-        dsram0.txt dsram1.txt dsram2.txt dsram3.txt
-        tsram0.txt tsram1.txt tsram2.txt tsram3.txt
-        stats0.txt stats1.txt stats2.txt stats3.txt
-```
-
-**With default filenames** (files in same directory):
-
-```
-sim.exe
-```
-
-### 13.4 Assembler
-
-The project includes an assembler for converting assembly to machine code:
-
-```
-asm.exe program.asm imem.txt
-```
 
 ---
 
@@ -816,7 +778,7 @@ Statistics collected per core:
 | instructions | Instructions executed (completed WB) |
 | read_hit     | Cache hits on LW instructions        |
 | write_hit    | Cache hits on SW instructions        |
-| read_miss    | Cache misses on LW instructions      |
+| read_miss    | Cache misses on LW instructio®ns      |
 | write_miss   | Cache misses on SW instructions      |
 | decode_stall | Cycles stalled due to data hazards   |
 | mem_stall    | Cycles stalled due to cache misses   |
