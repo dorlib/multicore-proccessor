@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="MulticoreProcessor/MulticoreProcessor.vcxproj" Id="ecab1214-4bb8-45db-a99e-66dbfabb54dc" />
+</Solution>
